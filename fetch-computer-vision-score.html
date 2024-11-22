@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iNaturalist Web App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .card img {
+            max-width: 1000px;
+            height: auto;
+            border-radius: 4px;
+            margin-right: 20px;
+        }
+
+        .card-content {
+            display: flex;
+            align-items: center;
+        }
+
+        .card-content div {
+            margin-left: 10px;
+        }
+
+        button {
+            padding: 10px;
+            margin: 10px 0;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        input,
+        select {
+            padding: 8px;
+            margin: 5px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        input[type="file"] {
+            margin-top: 10px;
+        }
+
+        #login-form,
+        #actions {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>iNaturalist Web App</h1>
+
+    <!-- Login Form -->
+    <div id="login-form" class="hidden">
+        <h2>Login</h2>
+        <input type="text" id="username" placeholder="Username">
+        <input type="password" id="password" placeholder="Password">
+        <button onclick="login()">Login</button>
+    </div>
+
+    <!-- Actions -->
+    <div id="actions">
+        <div>
+            <h2>Fetch Computer Vision Score</h2>
+            <input type="file" id="image">
+            <button onclick="fetchVision()">Analyze Image</button>
+        </div>
+        <div class="hidden" id="upload-observation">
+            <h2>Upload Observation</h2>
+            <input type="text" id="species" placeholder="Species Guess">
+            <input type="date" id="date">
+            <input type="text" id="latitude" placeholder="Latitude">
+            <input type="text" id="longitude" placeholder="Longitude">
+            <button onclick="uploadObservation()">Upload</button>
+        </div>
+        <div class="hidden" id="get-observations">
+            <h2>Get User Observations</h2>
+            <input type="text" id="userId" placeholder="User ID">
+            <button onclick="listObservations()">Fetch Observations</button>
+            <div id="observations"></div>
+        </div>
+    </div>
+
+    <!-- Computer Vision Result Display -->
+    <div id="vision-results" class="hidden">
+        <h2>Computer Vision Result</h2>
+        <div id="vision-card" class="card">
+            <!-- Vision result details will go here -->
+        </div>
+    </div>
+
+    <script>
+        const baseUrl = 'https://api.inaturalist.org/v2'
+        let token = 'eyJhbGciOiJIUzUxMiJ9.eyJ1c2VyX2lkIjo2NTA3OTM3LCJleHAiOjE3MzIzMDc5MzB9.h61n9sqbctEhUq7FL6zvDp91YDTl2yKbshtHgsDYETe1jC3kI-LSzpKMi8rm_RyH9bJSFYHAA6ZGatQHwD6caw'; // Replace with actual token after login
+
+        // Hide login form and show actions after successful login
+        function showActions() {
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('actions').classList.remove('hidden');
+        }
+
+        // Handle login
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            const response = await fetch(`${baseUrl}/auth`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: username, password: password })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                token = data.token;
+                alert('Login successful!');
+                showActions();
+            } else {
+                alert('Login failed!');
+            }
+        }
+
+        // Fetch the computer vision result
+        async function fetchVision() {
+            const imageInput = document.getElementById('image').files[0];
+            const formData = new FormData();
+            formData.append('image', imageInput);
+
+            const response = await fetch(`${baseUrl}/computervision/score_image`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: formData
+            });
+
+            const data = await response.json();
+            const result = data.results[0]; // Show the first result
+
+            // Show the computer vision results in a card format
+            const card = document.getElementById('vision-card');
+            const taxon = data.common_ancestor.taxon;
+            console.log(taxon)
+            card.innerHTML = `
+                <div class="card-content">
+                    <img src="${taxon.default_photo ? taxon.default_photo.url : ''}" alt="${taxon.name || 'Unknown'}">
+                    <div>
+                        <h3>Taxon: ${taxon.name || 'Unknown'}</h3>
+                        <p><strong>Score:</strong> ${result.combined_score.toFixed(2)}</p>
+                        <p><strong>Rank:</strong> ${taxon.rank || 'N/A'}</p>
+                        <p><strong>Observations Count:</strong> ${taxon.observations_count || 0}</p>
+                        <p><strong>Common Name:</strong> ${taxon.preferred_common_name || 'N/A'}</p>
+                        <a href="${taxon.wikipedia_url || '#'}" target="_blank">Learn more on Wikipedia</a>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('vision-results').classList.remove('hidden');
+        }
+
+        // Placeholder for uploading observation
+        async function uploadObservation() {
+            const species = document.getElementById('species').value;
+            const date = document.getElementById('date').value;
+            const latitude = document.getElementById('latitude').value;
+            const longitude = document.getElementById('longitude').value;
+
+            const response = await fetch(`${baseUrl}/observations`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    species_guess: species,
+                    observed_on: date,
+                    latitude: parseFloat(latitude),
+                    longitude: parseFloat(longitude)
+                })
+            });
+
+            if (response.ok) {
+                alert('Observation uploaded successfully!');
+            } else {
+                alert('Failed to upload observation!');
+            }
+        }
+
+        // Placeholder for listing observations
+        async function listObservations() {
+            const userId = document.getElementById('userId').value;
+
+            const response = await fetch(`${baseUrl}/observations/user/${userId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            const data = await response.json();
+            const observationsDiv = document.getElementById('observations');
+            observationsDiv.innerHTML = JSON.stringify(data.results, null, 2);
+        }
+    </script>
+
+</body>
+
+</html>
